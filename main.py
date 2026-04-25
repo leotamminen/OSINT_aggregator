@@ -68,6 +68,12 @@ async def run_dorking(username: str) -> dict:
                 continue
             if not urlparse(url).path.rstrip("/"):
                 continue
+            # GitHub is covered by its own agent
+            if "github.com" in url:
+                continue
+            # Drop fuzzy matches — username must appear in the URL or title
+            if username not in url.lower() and username not in title.lower():
+                continue
             seen.add(url)
             findings.append(f"{title} — {url}" if title else url)
 
