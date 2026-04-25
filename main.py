@@ -1,72 +1,64 @@
 import asyncio
+import os
+import shutil
+import subprocess
+import sys
+import sysconfig
+import time
+from urllib.parse import urlparse
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="OSINT Aggregator")
 
-# ─────────────────────────────────────────
-# MOCK AGENT DATA — replace with real agents in later phases
-# ─────────────────────────────────────────
-MOCK_AGENTS = [
-    {
-        "agent": "HIBP",
-        "delay": 0.9,
-        "status": "breach",
-        "findings": [
-            "Found in 3 data breaches",
-            "Adobe (Oct 2013) — email + password hash",
-            "LinkedIn (May 2016) — email + password hash",
-            "Dropbox (Jul 2012) — email + password hash",
-        ],
-        "severity": "high",
-    },
-    {
-        "agent": "GitHub",
-        "delay": 1.5,
-        "status": "found",
-        "findings": [
-            "Profile: github.com/{username}",
-            "32 public repositories",
-            "Primary languages: Python, JavaScript",
-            "Email in commits: {username}@example.com",
-            "Active contributor since 2020",
-        ],
-        "severity": "medium",
-    },
-    {
-        "agent": "Sherlock",
-        "delay": 4.2,
-        "status": "found",
-        "findings": [
-            "twitter.com/{username}",
-            "reddit.com/u/{username}",
-            "dev.to/{username}",
-            "news.ycombinator.com/user?id={username}",
-            "pypi.org/user/{username}",
-        ],
-        "severity": "medium",
-    },
-    {
-        "agent": "Dorking",
-        "delay": 2.3,
-        "status": "found",
-        "findings": [
-            "LinkedIn profile indexed publicly",
-            "Conference speaker bio (2023)",
-            "University thesis PDF indexed",
-        ],
-        "severity": "low",
-    },
-    {
-        "agent": "WHOIS",
-        "delay": 0.6,
-        "status": "not_found",
-        "findings": [
-            "No domain registrations found",
-        ],
-        "severity": "none",
-    },
-]
+
+def _find_sherlock() -> str:
+    if exe := shutil.which("sherlock"):
+        return exe
+    # Check all plausible Scripts directories (covers Windows Store Python / venvs)
+    candidates = [
+        sysconfig.get_path("scripts"),
+        sysconfig.get_path("scripts", "nt_user"),
+        os.path.dirname(sys.executable),
+    ]
+    for scripts_dir in filter(None, candidates):
+        for name in ("sherlock.exe", "sherlock"):
+            path = os.path.join(scripts_dir, name)
+            if os.path.isfile(path):
+                return path
+    return "sherlock"
+
+
+async def run_sherlock(username: str) -> dict:
+    def _blocking():
+        result = subprocess.run(
+            [_find_sherlock(), username, "--print-found", "--no-color", "--timeout", "15"],
+            capture_output=True,
+            timeout=120,
+        )
+        return result.stdout.decode("utf-8", errors="replace")
+
+    try:
+        output = await asyncio.to_thread(_blocking)
+
+        findings = []
+        for line in output.splitlines():
+            if line.startswith("[+]"):
+                # "[+] SiteName: https://..."
+                parts = line[4:].split(": ", 1)
+                if len(parts) == 2:
+                    url = parts[1].strip()
+                    # Skip bare domains — no profile path means the link is useless
+                    if urlparse(url).path.rstrip("/"):
+                        findings.append(url)
+
+        if findings:
+            return {"status": "found", "findings": findings, "severity": "medium"}
+        return {"status": "not_found", "findings": ["No accounts found on any platform"], "severity": "none"}
+    except subprocess.TimeoutExpired:
+        return {"status": "not_found", "findings": ["Scan timed out after 120s"], "severity": "none"}
+    except Exception as e:
+        return {"status": "not_found", "findings": [f"Error: {e}"], "severity": "none"}
 
 
 @app.websocket("/ws/search")
@@ -74,42 +66,21 @@ async def search_ws(websocket: WebSocket):
     await websocket.accept()
     try:
         data = await websocket.receive_json()
-        query = data.get("query", "target")
-        username = query.lower().replace(" ", "")
+        query = data.get("query", "")
+        username = query.strip().lower().replace(" ", "")
 
+        await websocket.send_json({"type": "started", "query": query, "total": 1})
+
+        await websocket.send_json({"type": "scanning", "agent": "Sherlock"})
+        t0 = time.perf_counter()
+        result = await run_sherlock(username)
+        elapsed = round(time.perf_counter() - t0, 1)
         await websocket.send_json({
-            "type": "started",
-            "query": query,
-            "total": len(MOCK_AGENTS),
+            "type": "result",
+            "agent": "Sherlock",
+            **result,
+            "elapsed": elapsed,
         })
-
-        async def run_agent(agent_data: dict):
-            # Notify frontend: agent is starting
-            await websocket.send_json({
-                "type": "scanning",
-                "agent": agent_data["agent"],
-            })
-
-            # Simulate work (replace with real logic in later phases)
-            await asyncio.sleep(agent_data["delay"])
-
-            # Substitute username placeholder in findings
-            findings = [
-                f.replace("{username}", username)
-                for f in agent_data["findings"]
-            ]
-
-            await websocket.send_json({
-                "type": "result",
-                "agent": agent_data["agent"],
-                "status": agent_data["status"],
-                "findings": findings,
-                "severity": agent_data["severity"],
-                "elapsed": round(agent_data["delay"], 1),
-            })
-
-        # All agents run concurrently — results arrive as each finishes
-        await asyncio.gather(*[run_agent(a) for a in MOCK_AGENTS])
 
         await websocket.send_json({"type": "complete"})
 
@@ -128,4 +99,4 @@ app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=9000, reload=True)

@@ -35,6 +35,9 @@ desktop.ini
 *.log
 logs/
 
+# Sherlock output files
+*.txt
+
 # API keys (never commit these)
 secrets.py
 config_local.py

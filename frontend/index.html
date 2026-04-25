@@ -479,7 +479,7 @@ input:focus {
 
   <header>
     <div class="logo">OSINT+</div>
-    <div class="logo-tag">// open source intelligence aggregator &nbsp;·&nbsp; v0.1-phase1 [mock]</div>
+    <div class="logo-tag">// open source intelligence aggregator &nbsp;·&nbsp; v0.2 · sherlock</div>
   </header>
 
   <!-- Search form -->
@@ -513,30 +513,18 @@ input:focus {
 
   <!-- Agent status pills -->
   <div class="agents-bar" id="agentsBar">
-    <div class="agent-pill" id="pill-HIBP">   <div class="pill-dot"></div>HIBP</div>
-    <div class="agent-pill" id="pill-GitHub">  <div class="pill-dot"></div>GitHub</div>
     <div class="agent-pill" id="pill-Sherlock"><div class="pill-dot"></div>Sherlock</div>
-    <div class="agent-pill" id="pill-Dorking"> <div class="pill-dot"></div>Dorking</div>
-    <div class="agent-pill" id="pill-WHOIS">   <div class="pill-dot"></div>WHOIS</div>
   </div>
 
   <!-- Summary stats (shown after complete) -->
   <div class="summary-bar" id="summaryBar">
     <div class="summary-stat">
-      <div class="stat-val accent" id="statFound">0</div>
-      <div class="stat-lbl">Sources hit</div>
-    </div>
-    <div class="summary-stat">
-      <div class="stat-val danger" id="statBreaches">0</div>
-      <div class="stat-lbl">Data breaches</div>
-    </div>
-    <div class="summary-stat">
-      <div class="stat-val" id="statPlatforms">0</div>
-      <div class="stat-lbl">Platforms</div>
+      <div class="stat-val accent" id="statPlatforms">0</div>
+      <div class="stat-lbl">Platforms found</div>
     </div>
     <div class="summary-stat">
       <div class="stat-val" id="statTime">—</div>
-      <div class="stat-lbl">Total time</div>
+      <div class="stat-lbl">Scan time</div>
     </div>
   </div>
 
@@ -551,10 +539,9 @@ input:focus {
 
 </div>
 <script>
-const WS_URL = 'ws://localhost:8000/ws/search';
+const WS_URL = 'ws://localhost:9000/ws/search';
 let ws = null;
 let t0 = null;
-let stats = { found: 0, breaches: 0, platforms: 0 };
 
 function startSearch() {
   const query = document.getElementById('queryInput').value.trim();
@@ -565,7 +552,6 @@ function startSearch() {
   document.getElementById('logBox').innerHTML = '';
   document.getElementById('logSection').style.display = 'none';
   document.getElementById('summaryBar').classList.remove('visible');
-  stats = { found: 0, breaches: 0, platforms: 0 };
   document.querySelectorAll('.agent-pill').forEach(p => p.className = 'agent-pill');
 
   const btn = document.getElementById('searchBtn');
@@ -619,9 +605,13 @@ function handle(msg) {
     const card = el('div', `result-card sev-${severityClass(msg.severity)}`);
     const badgeLabel = msg.status === 'breach' ? 'BREACH'
                      : msg.status === 'found'  ? 'FOUND' : 'NONE';
-    const findingsHTML = msg.findings.map(f =>
-      `<div class="finding${msg.status === 'breach' ? ' is-breach' : ''}">${f}</div>`
-    ).join('');
+    const findingsHTML = msg.findings.map(f => {
+      const cls = msg.status === 'breach' ? ' is-breach' : '';
+      const content = f.startsWith('http')
+        ? `<a href="${f}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${f}</a>`
+        : f;
+      return `<div class="finding${cls}">${content}</div>`;
+    }).join('');
     card.innerHTML = `
       <div class="card-head">
         <div class="card-agent-name">${msg.agent}</div>
@@ -633,18 +623,8 @@ function handle(msg) {
       <div class="card-body">${findingsHTML}</div>`;
     grid.appendChild(card);
 
-    // Update stats
-    if (msg.status === 'found' || msg.status === 'breach') {
-      stats.found++;
-      document.getElementById('statFound').textContent = stats.found;
-    }
-    if (msg.status === 'breach') {
-      stats.breaches++;
-      document.getElementById('statBreaches').textContent = stats.breaches;
-    }
-    if (msg.agent === 'Sherlock' && msg.status === 'found') {
-      stats.platforms = msg.findings.length;
-      document.getElementById('statPlatforms').textContent = stats.platforms;
+    if (msg.status === 'found') {
+      document.getElementById('statPlatforms').textContent = msg.findings.length;
     }
 
     const ac = msg.status === 'breach' ? 'danger' : msg.status === 'found' ? 'accent' : 'dim';
