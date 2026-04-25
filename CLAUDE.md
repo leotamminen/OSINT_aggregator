@@ -5,8 +5,10 @@ A multi-agent Open Source Intelligence tool. User inputs a name/username,
 the backend spins up parallel async agents that each search a different source,
 and results stream to the UI in real-time via WebSocket.
 
-## Current state: Phase 2 complete
-Sherlock is the only agent. All mocks removed. Bare-domain results filtered out.
+## Current state: Phase 3 complete
+Two real concurrent agents: GitHub (fast, ~1s) and Sherlock (slow, ~45s).
+GitHub uses the public REST API — no token required for profile lookups (60 req/hr limit).
+Sherlock results are filtered: bare domains (e.g. discord.com) are dropped.
 
 ## Stack
 - **Backend:** Python, FastAPI, asyncio, WebSocket (`main.py`)
@@ -67,9 +69,9 @@ These field names are used by the frontend — do not change them.
 ## Development phases
 - [x] Phase 1 — Mock UI + WebSocket shell
 - [x] Phase 2 — Sherlock (real agent, pip install sherlock-project)
-- [ ] Phase 3 — WHOIS + agent chaining (domain found → auto WHOIS)
+- [x] Phase 3 — GitHub (public REST API, concurrent with Sherlock)
 - [ ] Phase 4 — Dorking via DuckDuckGo (needs rate limiting)
-- [ ] Phase 5 — GitHub (real API)
+- [ ] Phase 5 — WHOIS + agent chaining (domain found → auto WHOIS)
 - [ ] Phase 6 — D3.js network graph visualization
 - [ ] Phase 7 — Ollama AI synthesis (local LLM summary)
 

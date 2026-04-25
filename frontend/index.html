@@ -513,6 +513,7 @@ input:focus {
 
   <!-- Agent status pills -->
   <div class="agents-bar" id="agentsBar">
+    <div class="agent-pill" id="pill-GitHub">  <div class="pill-dot"></div>GitHub</div>
     <div class="agent-pill" id="pill-Sherlock"><div class="pill-dot"></div>Sherlock</div>
   </div>
 
@@ -623,7 +624,7 @@ function handle(msg) {
       <div class="card-body">${findingsHTML}</div>`;
     grid.appendChild(card);
 
-    if (msg.status === 'found') {
+    if (msg.agent === 'Sherlock' && msg.status === 'found') {
       document.getElementById('statPlatforms').textContent = msg.findings.length;
     }
 
