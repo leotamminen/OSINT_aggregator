@@ -514,6 +514,7 @@ input:focus {
   <!-- Agent status pills -->
   <div class="agents-bar" id="agentsBar">
     <div class="agent-pill" id="pill-GitHub">  <div class="pill-dot"></div>GitHub</div>
+    <div class="agent-pill" id="pill-Dorking"> <div class="pill-dot"></div>Dorking</div>
     <div class="agent-pill" id="pill-Sherlock"><div class="pill-dot"></div>Sherlock</div>
   </div>
 
@@ -608,9 +609,9 @@ function handle(msg) {
                      : msg.status === 'found'  ? 'FOUND' : 'NONE';
     const findingsHTML = msg.findings.map(f => {
       const cls = msg.status === 'breach' ? ' is-breach' : '';
-      const content = f.startsWith('http')
-        ? `<a href="${f}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${f}</a>`
-        : f;
+      const content = f.replace(/(https?:\/\/[^\s<>"]+)/g, url =>
+        `<a href="${url}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${url}</a>`
+      );
       return `<div class="finding${cls}">${content}</div>`;
     }).join('');
     card.innerHTML = `

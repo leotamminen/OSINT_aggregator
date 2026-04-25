@@ -5,9 +5,10 @@ A multi-agent Open Source Intelligence tool. User inputs a name/username,
 the backend spins up parallel async agents that each search a different source,
 and results stream to the UI in real-time via WebSocket.
 
-## Current state: Phase 3 complete
-Two real concurrent agents: GitHub (fast, ~1s) and Sherlock (slow, ~45s).
-GitHub uses the public REST API — no token required for profile lookups (60 req/hr limit).
+## Current state: Phase 4 complete
+Three real concurrent agents: GitHub (~1s), Dorking (~2s), Sherlock (~45s).
+GitHub uses the public REST API — no token required (60 req/hr unauthenticated).
+Dorking uses ddgs (renamed from duckduckgo-search) — returns title + URL per result.
 Sherlock results are filtered: bare domains (e.g. discord.com) are dropped.
 
 ## Stack
@@ -70,7 +71,7 @@ These field names are used by the frontend — do not change them.
 - [x] Phase 1 — Mock UI + WebSocket shell
 - [x] Phase 2 — Sherlock (real agent, pip install sherlock-project)
 - [x] Phase 3 — GitHub (public REST API, concurrent with Sherlock)
-- [ ] Phase 4 — Dorking via DuckDuckGo (needs rate limiting)
+- [x] Phase 4 — Dorking via DuckDuckGo (ddgs package, single query, max 10 results)
 - [ ] Phase 5 — WHOIS + agent chaining (domain found → auto WHOIS)
 - [ ] Phase 6 — D3.js network graph visualization
 - [ ] Phase 7 — Ollama AI synthesis (local LLM summary)

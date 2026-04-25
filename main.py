@@ -48,6 +48,36 @@ async def run_github(username: str) -> dict:
         return {"status": "not_found", "findings": [f"Error: {e}"], "severity": "none"}
 
 
+# ── Dorking ──────────────────────────────────────────────────────────────────
+
+async def run_dorking(username: str) -> dict:
+    def _blocking():
+        from ddgs import DDGS
+        with DDGS() as ddgs:
+            return list(ddgs.text(f'"{username}"', max_results=10)) or []
+
+    try:
+        results = await asyncio.to_thread(_blocking)
+
+        findings = []
+        seen = set()
+        for r in results:
+            url = r.get("href", "")
+            title = r.get("title", "").strip()
+            if not url or url in seen:
+                continue
+            if not urlparse(url).path.rstrip("/"):
+                continue
+            seen.add(url)
+            findings.append(f"{title} — {url}" if title else url)
+
+        if findings:
+            return {"status": "found", "findings": findings, "severity": "low"}
+        return {"status": "not_found", "findings": ["No indexed results found"], "severity": "none"}
+    except Exception as e:
+        return {"status": "not_found", "findings": [f"Error: {e}"], "severity": "none"}
+
+
 # ── Sherlock ──────────────────────────────────────────────────────────────────
 
 def _find_sherlock() -> str:
@@ -100,6 +130,7 @@ async def run_sherlock(username: str) -> dict:
 
 AGENTS = [
     ("GitHub",   run_github),
+    ("Dorking",  run_dorking),
     ("Sherlock", run_sherlock),
 ]
 
