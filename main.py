@@ -8,6 +8,7 @@ import time
 from urllib.parse import urlparse
 
 import httpx
+import whois
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 
@@ -84,6 +85,49 @@ async def run_dorking(username: str) -> dict:
         return {"status": "not_found", "findings": [f"Error: {e}"], "severity": "none"}
 
 
+# ── WHOIS ────────────────────────────────────────────────────────────────────
+
+WHOIS_TLDS = ["com", "fi", "io", "net", "dev"]
+
+
+async def run_whois(username: str) -> dict:
+    async def _check(domain: str):
+        def _blocking():
+            try:
+                w = whois.whois(domain)
+                return w if w.domain_name else None
+            except Exception:
+                return None
+        return domain, await asyncio.to_thread(_blocking)
+
+    results = await asyncio.gather(*[_check(f"{username}.{tld}") for tld in WHOIS_TLDS])
+
+    findings = []
+    for domain, w in results:
+        if not w:
+            continue
+        findings.append(f"https://{domain}")
+        if w.registrar:
+            findings.append(f"Registrar: {w.registrar}")
+        date = w.creation_date
+        if date:
+            if isinstance(date, list):
+                date = date[0]
+            findings.append(f"Created: {str(date)[:10]}")
+        exp = w.expiration_date
+        if exp:
+            if isinstance(exp, list):
+                exp = exp[0]
+            findings.append(f"Expires: {str(exp)[:10]}")
+        name = str(w.name or "")
+        if name and not any(x in name.lower() for x in ("redacted", "privacy", "protected", "withheld")):
+            findings.append(f"Registrant: {name}")
+
+    if findings:
+        return {"status": "found", "findings": findings, "severity": "medium"}
+    return {"status": "not_found", "findings": ["No domain registrations found"], "severity": "none"}
+
+
 # ── Sherlock ──────────────────────────────────────────────────────────────────
 
 def _find_sherlock() -> str:
@@ -137,6 +181,7 @@ async def run_sherlock(username: str) -> dict:
 AGENTS = [
     ("GitHub",   run_github),
     ("Dorking",  run_dorking),
+    ("WHOIS",    run_whois),
     ("Sherlock", run_sherlock),
 ]
 
