@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSINT Aggregator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=IBM+Plex+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #08090d;
+  --surface:     #0d0f16;
+  --surface-2:   #13161f;
+  --border:      #1a1d2e;
+  --border-hi:   #252840;
+  --accent:      #00e5a0;
+  --accent-dim:  rgba(0,229,160,0.08);
+  --accent-glow: rgba(0,229,160,0.18);
+  --warn:        #f4a261;
+  --danger:      #e63946;
+  --text:        #dde1f0;
+  --text-muted:  #5a6280;
+  --text-dim:    #2a2e42;
+  --mono:        'IBM Plex Mono', monospace;
+  --sans:        'DM Sans', sans-serif;
+  --display:     'Syne', sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Subtle dot grid */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--text-dim) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 20px 80px;
+}
+
+/* ── Header ─────────────────────────────────── */
+header {
+  padding: 40px 0 28px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.logo {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  text-shadow: 0 0 24px var(--accent-glow);
+}
+
+.logo-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+/* ── Search card ─────────────────────────────── */
+.search-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 22px;
+  margin-bottom: 28px;
+}
+
+.search-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  min-width: 180px;
+}
+
+.input-group.wide { flex: 2; }
+
+.input-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+input[type="text"],
+input[type="number"] {
+  background: var(--surface-2);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  padding: 10px 13px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+input::placeholder { color: var(--text-dim); }
+
+input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+
+.filters-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.age-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.age-wrap input[type="number"] {
+  width: 68px;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.age-sep { color: var(--text-muted); font-size: 12px; }
+
+.btn-search {
+  flex: 1;
+  min-width: 150px;
+  background: var(--accent);
+  color: #020f09;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 10px 22px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.btn-search:hover  { opacity: 0.88; }
+.btn-search:active { transform: scale(0.98); }
+.btn-search:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+/* Shimmer while scanning */
+.btn-search::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60px; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+}
+.btn-search.running::after { animation: shimmer 1.3s linear infinite; }
+
+@keyframes shimmer { to { left: 200%; } }
+
+/* ── Agent pills ─────────────────────────────── */
+.agents-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.agent-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 13px 5px 9px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: all 0.3s;
+}
+
+.pill-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: all 0.3s;
+}
+
+.agent-pill.scanning .pill-dot  { background: var(--warn); animation: dotPulse 0.75s ease-in-out infinite; }
+.agent-pill.found    .pill-dot  { background: var(--accent); }
+.agent-pill.breach   .pill-dot  { background: var(--danger); }
+.agent-pill.not_found .pill-dot { background: var(--text-muted); }
+
+.agent-pill.found    { border-color: rgba(0,229,160,0.3);  color: var(--accent); }
+.agent-pill.breach   { border-color: rgba(230,57,70,0.35); color: var(--danger); }
+.agent-pill.scanning { border-color: rgba(244,162,97,0.3); color: var(--warn); }
+
+@keyframes dotPulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%     { opacity: 0.3; transform: scale(0.65); }
+}
+
+/* ── Summary bar ─────────────────────────────── */
+.summary-bar {
+  display: none;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 24px;
+  animation: cardIn 0.4s ease both;
+}
+
+.summary-bar.visible { display: flex; flex-wrap: wrap; }
+
+.summary-stat {
+  flex: 1;
+  min-width: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 16px 20px;
+  border-right: 1px solid var(--border);
+}
+
+.summary-stat:last-child { border-right: none; }
+
+.stat-val {
+  font-family: var(--display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+.stat-val.accent { color: var(--accent); }
+.stat-val.danger { color: var(--danger); }
+
+.stat-lbl {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Results grid ────────────────────────────── */
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 580px) {
+  .results-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Scanning placeholder card ───────────────── */
+.scan-card {
+  background: var(--surface);
+  border: 1px solid var(--border-hi);
+  border-radius: 10px;
+  padding: 18px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: cardIn 0.3s ease both;
+}
+
+.scan-spinner {
+  width: 15px; height: 15px;
+  border: 2px solid var(--border-hi);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.scan-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.scan-label b { color: var(--warn); font-weight: 500; }
+
+/* ── Result card ─────────────────────────────── */
+.result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  animation: cardIn 0.4s cubic-bezier(0.16,1,0.3,1) both;
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+.result-card.sev-high   { border-color: rgba(230,57,70,0.4);  box-shadow: 0 0 18px rgba(230,57,70,0.06); }
+.result-card.sev-medium { border-color: rgba(0,229,160,0.22); }
+.result-card.sev-low    { border-color: var(--border-hi); }
+.result-card.sev-none   { border-color: var(--border); opacity: 0.7; }
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-agent-name {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+}
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-elapsed {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.badge-found     { background: var(--accent-dim); color: var(--accent);  border: 1px solid rgba(0,229,160,0.2); }
+.badge-breach    { background: rgba(230,57,70,.1); color: var(--danger);  border: 1px solid rgba(230,57,70,0.2); }
+.badge-not_found { background: var(--surface-2);  color: var(--text-muted); border: 1px solid var(--border); }
+
+.card-body { padding: 10px 15px; }
+
+.finding {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.finding:last-child { border-bottom: none; }
+.finding::before { content: '›'; color: var(--accent); font-family: var(--mono); flex-shrink: 0; }
+.finding.is-breach { color: var(--text); }
+.finding.is-breach::before { color: var(--danger); }
+
+/* ── Location autocomplete ───────────────────── */
+#locationDropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  z-index: 99;
+  background: var(--surface-2);
+  border: 1px solid var(--border-hi);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.loc-option {
+  padding: 9px 13px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.loc-option:hover, .loc-option.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.log-section { display: none; }
+
+.log-head {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.log-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  max-height: 130px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.log-entry {
+  display: flex;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  animation: logIn 0.2s ease both;
+}
+
+@keyframes logIn {
+  from { opacity: 0; transform: translateX(-4px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.log-t     { color: var(--text-dim); flex-shrink: 0; min-width: 44px; }
+.log-a     { min-width: 72px; }
+.log-a.accent { color: var(--accent); }
+.log-a.danger { color: var(--danger); }
+.log-a.warn   { color: var(--warn); }
+.log-a.dim    { color: var(--text-muted); }
+.log-m.accent { color: var(--accent); }
+.log-m.danger { color: var(--danger); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">OSINT+</div>
+    <div class="logo-tag">// open source intelligence aggregator &nbsp;·&nbsp; v0.1-phase1 [mock]</div>
+  </header>
+
+  <!-- Search form -->
+  <div class="search-card">
+    <div class="search-row">
+      <div class="input-group wide">
+        <div class="input-label">Target — name or username</div>
+        <input type="text" id="queryInput" placeholder="e.g.  John Smith  or  johnsmith" autocomplete="off">
+      </div>
+      <div class="input-group" style="position:relative">
+        <div class="input-label">Location (optional)</div>
+        <input type="text" id="locationInput" placeholder="Helsinki, Finland" value="Helsinki, Finland"
+          autocomplete="off" oninput="locationSuggest(this.value)" onblur="setTimeout(closeSuggest,150)">
+        <div id="locationDropdown"></div>
+      </div>
+    </div>
+    <div class="filters-row">
+      <div class="input-group" style="flex:0">
+        <div class="input-label">Age range</div>
+        <div class="age-wrap">
+          <input type="number" id="ageMin" value="22" min="1" max="120">
+          <span class="age-sep">–</span>
+          <input type="number" id="ageMax" value="35" min="1" max="120">
+        </div>
+      </div>
+      <button class="btn-search" id="searchBtn" onclick="startSearch()">
+        Run Search
+      </button>
+    </div>
+  </div>
+
+  <!-- Agent status pills -->
+  <div class="agents-bar" id="agentsBar">
+    <div class="agent-pill" id="pill-HIBP">   <div class="pill-dot"></div>HIBP</div>
+    <div class="agent-pill" id="pill-GitHub">  <div class="pill-dot"></div>GitHub</div>
+    <div class="agent-pill" id="pill-Sherlock"><div class="pill-dot"></div>Sherlock</div>
+    <div class="agent-pill" id="pill-Dorking"> <div class="pill-dot"></div>Dorking</div>
+    <div class="agent-pill" id="pill-WHOIS">   <div class="pill-dot"></div>WHOIS</div>
+  </div>
+
+  <!-- Summary stats (shown after complete) -->
+  <div class="summary-bar" id="summaryBar">
+    <div class="summary-stat">
+      <div class="stat-val accent" id="statFound">0</div>
+      <div class="stat-lbl">Sources hit</div>
+    </div>
+    <div class="summary-stat">
+      <div class="stat-val danger" id="statBreaches">0</div>
+      <div class="stat-lbl">Data breaches</div>
+    </div>
+    <div class="summary-stat">
+      <div class="stat-val" id="statPlatforms">0</div>
+      <div class="stat-lbl">Platforms</div>
+    </div>
+    <div class="summary-stat">
+      <div class="stat-val" id="statTime">—</div>
+      <div class="stat-lbl">Total time</div>
+    </div>
+  </div>
+
+  <!-- Results appear here in real-time -->
+  <div class="results-grid" id="resultsGrid"></div>
+
+  <!-- Event log -->
+  <div class="log-section" id="logSection">
+    <div class="log-head">// event log</div>
+    <div class="log-box" id="logBox"></div>
+  </div>
+
+</div>
+<script>
+const WS_URL = 'ws://localhost:8000/ws/search';
+let ws = null;
+let t0 = null;
+let stats = { found: 0, breaches: 0, platforms: 0 };
+
+function startSearch() {
+  const query = document.getElementById('queryInput').value.trim();
+  if (!query) { document.getElementById('queryInput').focus(); return; }
+
+  // Reset
+  document.getElementById('resultsGrid').innerHTML = '';
+  document.getElementById('logBox').innerHTML = '';
+  document.getElementById('logSection').style.display = 'none';
+  document.getElementById('summaryBar').classList.remove('visible');
+  stats = { found: 0, breaches: 0, platforms: 0 };
+  document.querySelectorAll('.agent-pill').forEach(p => p.className = 'agent-pill');
+
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true;
+  btn.classList.add('running');
+  btn.textContent = 'Scanning...';
+  t0 = Date.now();
+
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      query,
+      location: document.getElementById('locationInput').value.trim(),
+      age_min: parseInt(document.getElementById('ageMin').value) || null,
+      age_max: parseInt(document.getElementById('ageMax').value) || null,
+    }));
+  };
+
+  ws.onmessage = e => handle(JSON.parse(e.data));
+
+  ws.onerror = () => {
+    addLog('system', 'dim', 'Connection failed — is the backend running on :8000?', '');
+    resetBtn();
+  };
+
+  ws.onclose = () => resetBtn();
+}
+
+function handle(msg) {
+  const grid = document.getElementById('resultsGrid');
+
+  if (msg.type === 'started') {
+    document.getElementById('logSection').style.display = 'block';
+    addLog('system', 'dim', `Search started · "${msg.query}" · ${msg.total} agents`, '');
+
+  } else if (msg.type === 'scanning') {
+    setPill(msg.agent, 'scanning');
+    const card = el('div', 'scan-card');
+    card.id = 'scan-' + msg.agent;
+    card.innerHTML = `<div class="scan-spinner"></div>
+      <div class="scan-label"><b>${msg.agent}</b> &nbsp;·&nbsp; scanning...</div>`;
+    grid.appendChild(card);
+    addLog(msg.agent, 'warn', 'scanning...', '');
+
+  } else if (msg.type === 'result') {
+    setPill(msg.agent, msg.status);
+    const old = document.getElementById('scan-' + msg.agent);
+    if (old) old.remove();
+
+    const card = el('div', `result-card sev-${severityClass(msg.severity)}`);
+    const badgeLabel = msg.status === 'breach' ? 'BREACH'
+                     : msg.status === 'found'  ? 'FOUND' : 'NONE';
+    const findingsHTML = msg.findings.map(f =>
+      `<div class="finding${msg.status === 'breach' ? ' is-breach' : ''}">${f}</div>`
+    ).join('');
+    card.innerHTML = `
+      <div class="card-head">
+        <div class="card-agent-name">${msg.agent}</div>
+        <div class="card-meta">
+          <div class="card-elapsed">${msg.elapsed}s</div>
+          <div class="badge badge-${msg.status}">${badgeLabel}</div>
+        </div>
+      </div>
+      <div class="card-body">${findingsHTML}</div>`;
+    grid.appendChild(card);
+
+    // Update stats
+    if (msg.status === 'found' || msg.status === 'breach') {
+      stats.found++;
+      document.getElementById('statFound').textContent = stats.found;
+    }
+    if (msg.status === 'breach') {
+      stats.breaches++;
+      document.getElementById('statBreaches').textContent = stats.breaches;
+    }
+    if (msg.agent === 'Sherlock' && msg.status === 'found') {
+      stats.platforms = msg.findings.length;
+      document.getElementById('statPlatforms').textContent = stats.platforms;
+    }
+
+    const ac = msg.status === 'breach' ? 'danger' : msg.status === 'found' ? 'accent' : 'dim';
+    addLog(msg.agent, ac, `complete · ${msg.elapsed}s · ${msg.findings.length} finding(s)`, ac);
+
+  } else if (msg.type === 'complete') {
+    const total = ((Date.now() - t0) / 1000).toFixed(1);
+    document.getElementById('statTime').textContent = total + 's';
+    document.getElementById('summaryBar').classList.add('visible');
+    addLog('system', 'dim', `All agents complete · ${total}s`, '');
+    resetBtn();
+  }
+}
+
+function setPill(agent, status) {
+  const p = document.getElementById('pill-' + agent);
+  if (p) p.className = 'agent-pill ' + status;
+}
+
+function addLog(agent, agentClass, message, msgClass) {
+  const elapsed = t0 ? ((Date.now() - t0) / 1000).toFixed(1) : '0.0';
+  const box = document.getElementById('logBox');
+  const row = el('div', 'log-entry');
+  row.innerHTML = `<span class="log-t">[${elapsed}s]</span>
+    <span class="log-a ${agentClass}">${agent}</span>
+    <span class="log-m ${msgClass}">${message}</span>`;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+function el(tag, cls) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  return e;
+}
+
+function severityClass(s) {
+  return { high: 'high', medium: 'medium', low: 'low', none: 'none' }[s] || 'none';
+}
+
+function resetBtn() {
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = false;
+  btn.classList.remove('running');
+  btn.textContent = 'Run Search';
+}
+
+
+// ── Location autocomplete ───────────────────────────────
+const CITIES = [
+  'Helsinki, Finland','Espoo, Finland','Tampere, Finland','Turku, Finland',
+  'Oulu, Finland','Jyväskylä, Finland','Lahti, Finland','Kuopio, Finland',
+  'Pori, Finland','Joensuu, Finland','Lappeenranta, Finland','Vaasa, Finland',
+  'Rovaniemi, Finland','Kotka, Finland','Seinäjoki, Finland','Mikkeli, Finland',
+  'Stockholm, Sweden','Gothenburg, Sweden','Malmö, Sweden',
+  'Oslo, Norway','Bergen, Norway',
+  'Copenhagen, Denmark',
+  'London, UK','Manchester, UK','Edinburgh, UK',
+  'Berlin, Germany','Munich, Germany','Hamburg, Germany',
+  'Amsterdam, Netherlands',
+  'Paris, France',
+  'New York, USA','San Francisco, USA','Los Angeles, USA','Chicago, USA',
+  'Toronto, Canada','Vancouver, Canada',
+  'Sydney, Australia','Melbourne, Australia',
+];
+
+let activeIdx = -1;
+
+function locationSuggest(val) {
+  const dd = document.getElementById('locationDropdown');
+  const q = val.trim().toLowerCase();
+  if (q.length < 2) { closeSuggest(); return; }
+
+  const matches = CITIES.filter(c => c.toLowerCase().includes(q)).slice(0, 6);
+  if (!matches.length) { closeSuggest(); return; }
+
+  activeIdx = -1;
+  dd.innerHTML = matches.map((c, i) =>
+    `<div class="loc-option" data-i="${i}" onmousedown="pickCity('${c}')">${c}</div>`
+  ).join('');
+  dd.style.display = 'block';
+}
+
+function pickCity(city) {
+  document.getElementById('locationInput').value = city;
+  closeSuggest();
+}
+
+function closeSuggest() {
+  document.getElementById('locationDropdown').style.display = 'none';
+}
+
+// Keyboard nav for dropdown
+document.getElementById('locationInput')?.addEventListener('keydown', e => {
+  const opts = document.querySelectorAll('.loc-option');
+  if (!opts.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    activeIdx = Math.min(activeIdx + 1, opts.length - 1);
+    opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    activeIdx = Math.max(activeIdx - 1, 0);
+    opts.forEach((o, i) => o.classList.toggle('active', i === activeIdx));
+  } else if (e.key === 'Enter' && activeIdx >= 0) {
+    e.preventDefault();
+    pickCity(opts[activeIdx].textContent);
+  } else if (e.key === 'Escape') {
+    closeSuggest();
+  }
+});
+
+document.getElementById('queryInput')?.addEventListener('keydown', e => {
+  if (e.key === 'Enter') startSearch();
+});
+</script>
+</body>
+</html>
